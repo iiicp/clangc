@@ -1,0 +1,254 @@
+#ifndef TOK
+#define TOK(X)
+#endif
+
+#ifndef KEYWORD
+#define KEYWORD(X, Y) TOK(kw_##X)
+#endif
+
+#ifndef ALIAS
+#define ALIAS(X, Y, Z)
+#endif
+
+#ifndef PPKEYWORD
+#define PPKEYWORD(X)
+#endif
+
+//===----------------------------------------------------------------------===//
+// Preprocessor keywords.
+//===----------------------------------------------------------------------===//
+
+// These have meaning after a '#' at the start of a line. These define enums in
+// the tok::pp_* namespace.  Note that IdentifierInfo::getPPKeywordID must be
+// manually updated if something is added here.
+PPKEYWORD(not_keyword)
+
+// C99 6.10.1 - Conditional Inclusion.
+PPKEYWORD(if)
+PPKEYWORD(ifdef)
+PPKEYWORD(ifndef)
+PPKEYWORD(elif)
+PPKEYWORD(else)
+PPKEYWORD(endif)
+PPKEYWORD(defined)
+
+// C99 6.10.2 - Source File Inclusion.
+PPKEYWORD(include)
+PPKEYWORD(__include_macros)
+
+// C99 6.10.3 - Macro Replacement.
+PPKEYWORD(define)
+PPKEYWORD(undef)
+
+// C99 6.10.4 - Line Control.
+PPKEYWORD(line)
+
+// C99 6.10.5 - Error Directive.
+PPKEYWORD(error)
+
+// C99 6.10.6 - Pragma Directive.
+PPKEYWORD(pragma)
+
+// GNU Extensions.
+PPKEYWORD(import)
+PPKEYWORD(include_next)
+PPKEYWORD(warning)
+PPKEYWORD(ident)
+PPKEYWORD(sccs)
+PPKEYWORD(assert)
+PPKEYWORD(unassert)
+
+//===----------------------------------------------------------------------===//
+// Language keywords.
+//===----------------------------------------------------------------------===//
+
+// These define members of the tok::* namespace.
+
+TOK(unknown) // Not a token.
+TOK(eof)     // End of file.
+TOK(eom)     // End of macro (end of line inside a macro).
+
+// C99 6.4.9: Comments.
+TOK(comment) // Comment (only in -E -C[C] mode)
+
+// C99 6.4.2: Identifiers.
+TOK(identifier) // abcde123
+
+// C99 6.4.4.1: Integer Constants
+// C99 6.4.4.2: Floating Constants
+TOK(numeric_constant) // 0x123
+
+// C99 6.4.4: Character Constants
+TOK(char_constant) // 'a'   L'b'
+
+// C99 6.4.5: String Literals.
+TOK(string_literal)       // "foo"
+TOK(wide_string_literal)  // L"foo"
+TOK(angle_string_literal) // <foo>
+
+// C99 6.4.6: Punctuators.
+TOK(l_square)            // [
+TOK(r_square)            // ]
+TOK(l_paren)             // (
+TOK(r_paren)             // )
+TOK(l_brace)             // {
+TOK(r_brace)             // }
+TOK(period)              // .
+TOK(ellipsis)            // ...
+TOK(amp)                 // &
+TOK(ampamp)              // &&
+TOK(ampequal)            // &=
+TOK(star)                // *
+TOK(starequal)           // *=
+TOK(plus)                // +
+TOK(plusplus)            // ++
+TOK(plusequal)           // +=
+TOK(minus)               // -
+TOK(arrow)               // ->
+TOK(minusminus)          // --
+TOK(minusequal)          // -=
+TOK(tilde)               // ~
+TOK(exclaim)             // !
+TOK(exclaimequal)        // !=
+TOK(slash)               // /
+TOK(slashequal)          // /=
+TOK(percent)             // %
+TOK(percentequal)        // %=
+TOK(less)                // <
+TOK(lessless)            // <<
+TOK(lessequal)           // <=
+TOK(lesslessequal)       // <<=
+TOK(greater)             // >
+TOK(greatergreater)      // >>
+TOK(greaterequal)        // >=
+TOK(greatergreaterequal) // >>=
+TOK(caret)               // ^
+TOK(caretequal)          // ^=
+TOK(pipe)                // |
+TOK(pipepipe)            // ||
+TOK(pipeequal)           // |=
+TOK(question)            // ?
+TOK(colon)               // :
+TOK(semi)                // ;
+TOK(equal)               // =
+TOK(equalequal)          // ==
+TOK(comma)               // ,
+TOK(hash)                // #
+TOK(hashhash)            // ##
+TOK(hashat)              // #@
+
+// C99 6.4.1: Keywords.  These turn into kw_* tokens.
+// Flags allowed:
+//   KEYALL   - This is a keyword in all variants of C and C++, or it
+//              is a keyword in the implementation namespace that should
+//              always be treated as a keyword
+//   KEYC99   - This is a keyword introduced to C in C99
+//   KEYCXX   - This is a C++ keyword, or a C++-specific keyword in the
+//              implementation namespace
+//   KEYCXX0X - This is a C++ keyword introduced to C++ in C++0x
+//   KEYGNU   - This is a keyword if GNU extensions are enabled
+//   KEYMS    - This is a keyword if Microsoft extensions are enabled
+//
+KEYWORD(auto, KEYALL)
+KEYWORD(break, KEYALL)
+KEYWORD(case, KEYALL)
+KEYWORD(char, KEYALL)
+KEYWORD(const, KEYALL)
+KEYWORD(continue, KEYALL)
+KEYWORD(default, KEYALL)
+KEYWORD(do, KEYALL)
+KEYWORD(double, KEYALL)
+KEYWORD(else, KEYALL)
+KEYWORD(enum, KEYALL)
+KEYWORD(extern, KEYALL)
+KEYWORD(float, KEYALL)
+KEYWORD(for                         , KEYALL)
+KEYWORD(goto, KEYALL)
+KEYWORD(if, KEYALL)
+KEYWORD(inline, KEYC99 | KEYGNU)
+KEYWORD(int, KEYALL)
+KEYWORD(long, KEYALL)
+KEYWORD(register, KEYALL)
+KEYWORD(restrict, KEYC99)
+KEYWORD(return, KEYALL)
+KEYWORD(short, KEYALL)
+KEYWORD(signed, KEYALL)
+KEYWORD(sizeof, KEYALL)
+KEYWORD(static, KEYALL)
+KEYWORD(struct, KEYALL)
+KEYWORD(switch, KEYALL)
+KEYWORD(typedef, KEYALL)
+KEYWORD(union, KEYALL)
+KEYWORD(unsigned, KEYALL)
+KEYWORD(void, KEYALL)
+KEYWORD(volatile, KEYALL)
+KEYWORD(while, KEYALL)
+KEYWORD(_Bool, KEYALL)
+KEYWORD(_Complex, KEYALL)
+KEYWORD(_Imaginary, KEYALL)
+KEYWORD(__func__, KEYALL)
+
+KEYWORD(asm, KEYGNU)
+
+KEYWORD(wchar_t, KEYALL)
+
+// GNU Extensions (in impl-reserved namespace)
+KEYWORD(_Decimal32, KEYALL)
+KEYWORD(_Decimal64, KEYALL)
+KEYWORD(_Decimal128, KEYALL)
+KEYWORD(__alignof, KEYALL)
+KEYWORD(__attribute, KEYALL)
+KEYWORD(__builtin_choose_expr, KEYALL)
+KEYWORD(__builtin_offsetof, KEYALL)
+KEYWORD(__builtin_types_compatible_p, KEYALL)
+KEYWORD(__builtin_va_arg, KEYALL)
+KEYWORD(__extension__, KEYALL)
+KEYWORD(__imag, KEYALL)
+KEYWORD(__label__, KEYALL)
+KEYWORD(__real, KEYALL)
+KEYWORD(__thread, KEYALL)
+KEYWORD(__FUNCTION__, KEYALL)
+KEYWORD(__PRETTY_FUNCTION__, KEYALL)
+
+// GNU Extensions (outside impl-reserved namespace)
+KEYWORD(typeof, KEYGNU)
+
+// Apple Extension.
+KEYWORD(__private_extern__, KEYALL)
+
+// Microsoft Extension.
+KEYWORD(__declspec, KEYALL)
+KEYWORD(__cdecl, KEYALL)
+KEYWORD(__stdcall, KEYALL)
+KEYWORD(__fastcall, KEYALL)
+KEYWORD(__ptr64, KEYALL)
+KEYWORD(__w64, KEYALL)
+KEYWORD(__forceinline, KEYALL)
+
+// Alternate spelling for various tokens.  There are GCC extensions in all
+// languages, but should not be disabled in strict conformance mode.
+ALIAS("__attribute__", __attribute, KEYALL)
+ALIAS("__const", const, KEYALL)
+ALIAS("__const__", const, KEYALL)
+ALIAS("__alignof__", __alignof, KEYALL)
+ALIAS("__asm", asm, KEYALL)
+ALIAS("__asm__", asm, KEYALL)
+ALIAS("__complex", _Complex, KEYALL)
+ALIAS("__complex__", _Complex, KEYALL)
+ALIAS("__imag__", __imag, KEYALL)
+ALIAS("__inline", inline, KEYALL)
+ALIAS("__inline__", inline, KEYALL)
+ALIAS("__real__", __real, KEYALL)
+ALIAS("__restrict", restrict, KEYALL)
+ALIAS("__restrict__", restrict, KEYALL)
+ALIAS("__signed", signed, KEYALL)
+ALIAS("__signed__", signed, KEYALL)
+ALIAS("__typeof", typeof, KEYALL)
+ALIAS("__typeof__", typeof, KEYALL)
+ALIAS("__volatile", volatile, KEYALL)
+ALIAS("__volatile__", volatile, KEYALL)
+
+#undef PPKEYWORD
+#undef ALIAS
+#undef KEYWORD
+#undef TOK
