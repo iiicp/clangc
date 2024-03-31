@@ -14,29 +14,26 @@
 #ifndef LLVM_CLANG_SOURCELOCATION_H
 #define LLVM_CLANG_SOURCELOCATION_H
 
-#include "clang/Basic/LLVM.h"
-#include "llvm/Support/PointerLikeTypeTraits.h"
 #include <utility>
-#include <functional>
 #include <cassert>
 
 namespace llvm {
-  class MemoryBuffer;
-  template <typename T> struct DenseMapInfo;
-  template <typename T> struct isPodLike;
+class MemoryBuffer;
+class raw_ostream;
+template <typename T> struct DenseMapInfo;
 }
 
 namespace clang {
 
 class SourceManager;
+class FileEntry;
 
 /// FileID - This is an opaque identifier used by SourceManager which refers to
 /// a source file (MemoryBuffer) along with its #include path and #line data.
 ///
 class FileID {
-  /// ID - Opaque identifier, 0 is "invalid". >0 is this module, <-1 is
-  /// something loaded from another module.
-  int ID;
+  /// ID - Opaque identifier, 0 is "invalid".
+  unsigned ID;
 public:
   FileID() : ID(0) {}
 
@@ -49,63 +46,46 @@ public:
   bool operator>(const FileID &RHS) const { return RHS < *this; }
   bool operator>=(const FileID &RHS) const { return RHS <= *this; }
 
-  static FileID getSentinel() { return get(-1); }
-  unsigned getHashValue() const { return static_cast<unsigned>(ID); }
+  static FileID getSentinel() { return get(~0U); }
+  unsigned getHashValue() const { return ID; }
 
 private:
   friend class SourceManager;
-  friend class ASTWriter;
-  friend class ASTReader;
-  
-  static FileID get(int V) {
+  static FileID get(unsigned V) {
     FileID F;
     F.ID = V;
     return F;
   }
-  int getOpaqueValue() const { return ID; }
+  unsigned getOpaqueValue() const { return ID; }
 };
 
 
-/// \brief Encodes a location in the source. The SourceManager can decode this
-/// to get at the full include stack, line and column information.
-///
-/// Technically, a source location is simply an offset into the manager's view
-/// of the input source, which is all input buffers (including macro
-/// expansions) concatenated in an effectively arbitrary order. The manager
-/// actually maintains two blocks of input buffers. One, starting at offset
-/// 0 and growing upwards, contains all buffers from this module. The other,
-/// starting at the highest possible offset and growing downwards, contains
-/// buffers of loaded modules.
-///
-/// In addition, one bit of SourceLocation is used for quick access to the
-/// information whether the location is in a file or a macro expansion.
-///
-/// It is important that this type remains small. It is currently 32 bits wide.
+/// SourceLocation - This is a carefully crafted 32-bit identifier that encodes
+/// a full include stack, line and column number information for a position in
+/// an input translation unit.
 class SourceLocation {
   unsigned ID;
   friend class SourceManager;
-  friend class ASTReader;
-  friend class ASTWriter;
   enum {
     MacroIDBit = 1U << 31
   };
 public:
 
-  SourceLocation() : ID(0) {}
+  SourceLocation() : ID(0) {}  // 0 is an invalid FileID.
 
   bool isFileID() const  { return (ID & MacroIDBit) == 0; }
   bool isMacroID() const { return (ID & MacroIDBit) != 0; }
 
-  /// \brief Return true if this is a valid SourceLocation object.
+  /// isValid - Return true if this is a valid SourceLocation object.  Invalid
+  /// SourceLocations are often used when events have no corresponding location
+  /// in the source (e.g. a diagnostic is required for a command line option).
   ///
-  /// Invalid SourceLocations are often used when events have no corresponding
-  /// location in the source (e.g. a diagnostic is required for a command line
-  /// option).
   bool isValid() const { return ID != 0; }
   bool isInvalid() const { return ID == 0; }
 
 private:
-  /// \brief Return the offset into the manager's global input view.
+  /// getOffset - Return the index for SourceManager's SLocEntryTable table,
+  /// note that this is not an index *into* it though.
   unsigned getOffset() const {
     return ID & ~MacroIDBit;
   }
@@ -125,10 +105,10 @@ private:
   }
 public:
 
-  /// \brief Return a source location with the specified offset from this
-  /// SourceLocation.
-  SourceLocation getLocWithOffset(int Offset) const {
-    assert(((getOffset()+Offset) & MacroIDBit) == 0 && "offset overflow");
+  /// getFileLocWithOffset - Return a source location with the specified offset
+  /// from this file SourceLocation.
+  SourceLocation getFileLocWithOffset(int Offset) const {
+    assert(((getOffset()+Offset) & MacroIDBit) == 0 && "invalid location");
     SourceLocation L;
     L.ID = ID+Offset;
     return L;
@@ -140,6 +120,7 @@ public:
   /// directly.
   unsigned getRawEncoding() const { return ID; }
 
+
   /// getFromRawEncoding - Turn a raw encoding of a SourceLocation object into
   /// a real SourceLocation.
   static SourceLocation getFromRawEncoding(unsigned Encoding) {
@@ -148,23 +129,7 @@ public:
     return X;
   }
 
-  /// getPtrEncoding - When a SourceLocation itself cannot be used, this returns
-  /// an (opaque) pointer encoding for it.  This should only be passed
-  /// to SourceLocation::getFromPtrEncoding, it should not be inspected
-  /// directly.
-  void* getPtrEncoding() const {
-    // Double cast to avoid a warning "cast to pointer from integer of different
-    // size".
-    return (void*)(uintptr_t)getRawEncoding();
-  }
-
-  /// getFromPtrEncoding - Turn a pointer encoding of a SourceLocation object
-  /// into a real SourceLocation.
-  static SourceLocation getFromPtrEncoding(void *Encoding) {
-    return getFromRawEncoding((unsigned)(uintptr_t)Encoding);
-  }
-
-  void print(raw_ostream &OS, const SourceManager &SM) const;
+  void print(llvm::raw_ostream &OS, const SourceManager &SM) const;
   void dump(const SourceManager &SM) const;
 };
 
@@ -196,7 +161,6 @@ public:
   void setEnd(SourceLocation e) { E = e; }
 
   bool isValid() const { return B.isValid() && E.isValid(); }
-  bool isInvalid() const { return !isValid(); }
 
   bool operator==(const SourceRange &X) const {
     return B == X.B && E == X.E;
@@ -206,67 +170,22 @@ public:
     return B != X.B || E != X.E;
   }
 };
-  
-/// CharSourceRange - This class represents a character granular source range.
-/// The underlying SourceRange can either specify the starting/ending character
-/// of the range, or it can specify the start or the range and the start of the
-/// last token of the range (a "token range").  In the token range case, the
-/// size of the last token must be measured to determine the actual end of the
-/// range.
-class CharSourceRange { 
-  SourceRange Range;
-  bool IsTokenRange;
-public:
-  CharSourceRange() : IsTokenRange(false) {}
-  CharSourceRange(SourceRange R, bool ITR) : Range(R),IsTokenRange(ITR){}
-
-  static CharSourceRange getTokenRange(SourceRange R) {
-    CharSourceRange Result;
-    Result.Range = R;
-    Result.IsTokenRange = true;
-    return Result;
-  }
-
-  static CharSourceRange getCharRange(SourceRange R) {
-    CharSourceRange Result;
-    Result.Range = R;
-    Result.IsTokenRange = false;
-    return Result;
-  }
-    
-  static CharSourceRange getTokenRange(SourceLocation B, SourceLocation E) {
-    return getTokenRange(SourceRange(B, E));
-  }
-  static CharSourceRange getCharRange(SourceLocation B, SourceLocation E) {
-    return getCharRange(SourceRange(B, E));
-  }
-  
-  /// isTokenRange - Return true if the end of this range specifies the start of
-  /// the last token.  Return false if the end of this range specifies the last
-  /// character in the range.
-  bool isTokenRange() const { return IsTokenRange; }
-  
-  SourceLocation getBegin() const { return Range.getBegin(); }
-  SourceLocation getEnd() const { return Range.getEnd(); }
-  const SourceRange &getAsRange() const { return Range; }
- 
-  void setBegin(SourceLocation b) { Range.setBegin(b); }
-  void setEnd(SourceLocation e) { Range.setEnd(e); }
-  
-  bool isValid() const { return Range.isValid(); }
-  bool isInvalid() const { return !isValid(); }
-};
 
 /// FullSourceLoc - A SourceLocation and its associated SourceManager.  Useful
 /// for argument passing to functions that expect both objects.
 class FullSourceLoc : public SourceLocation {
-  const SourceManager *SrcMgr;
+  SourceManager* SrcMgr;
 public:
   /// Creates a FullSourceLoc where isValid() returns false.
-  explicit FullSourceLoc() : SrcMgr(0) {}
+  explicit FullSourceLoc() : SrcMgr((SourceManager*) 0) {}
 
-  explicit FullSourceLoc(SourceLocation Loc, const SourceManager &SM)
-    : SourceLocation(Loc), SrcMgr(&SM) {}
+  explicit FullSourceLoc(SourceLocation Loc, SourceManager &SM)
+      : SourceLocation(Loc), SrcMgr(&SM) {}
+
+  SourceManager &getManager() {
+    assert(SrcMgr && "SourceManager is NULL.");
+    return *SrcMgr;
+  }
 
   const SourceManager &getManager() const {
     assert(SrcMgr && "SourceManager is NULL.");
@@ -275,22 +194,22 @@ public:
 
   FileID getFileID() const;
 
-  FullSourceLoc getExpansionLoc() const;
+  FullSourceLoc getInstantiationLoc() const;
   FullSourceLoc getSpellingLoc() const;
 
-  unsigned getExpansionLineNumber(bool *Invalid = 0) const;
-  unsigned getExpansionColumnNumber(bool *Invalid = 0) const;
+  unsigned getInstantiationLineNumber() const;
+  unsigned getInstantiationColumnNumber() const;
 
-  unsigned getSpellingLineNumber(bool *Invalid = 0) const;
-  unsigned getSpellingColumnNumber(bool *Invalid = 0) const;
+  unsigned getSpellingLineNumber() const;
+  unsigned getSpellingColumnNumber() const;
 
-  const char *getCharacterData(bool *Invalid = 0) const;
+  const char *getCharacterData() const;
 
-  const llvm::MemoryBuffer* getBuffer(bool *Invalid = 0) const;
+  const llvm::MemoryBuffer* getBuffer() const;
 
-  /// getBufferData - Return a StringRef to the source buffer data for the
-  /// specified FileID.
-  StringRef getBufferData(bool *Invalid = 0) const;
+  /// getBufferData - Return a pointer to the start and end of the source buffer
+  /// data for the specified FileID.
+  std::pair<const char*, const char*> getBufferData() const;
 
   /// getDecomposedLoc - Decompose the specified location into a raw FileID +
   /// Offset pair.  The first element is the FileID, the second is the
@@ -299,28 +218,6 @@ public:
 
   bool isInSystemHeader() const;
 
-  /// \brief Determines the order of 2 source locations in the translation unit.
-  ///
-  /// \returns true if this source location comes before 'Loc', false otherwise.
-  bool isBeforeInTranslationUnitThan(SourceLocation Loc) const;
-
-  /// \brief Determines the order of 2 source locations in the translation unit.
-  ///
-  /// \returns true if this source location comes before 'Loc', false otherwise.
-  bool isBeforeInTranslationUnitThan(FullSourceLoc Loc) const {
-    assert(Loc.isValid());
-    assert(SrcMgr == Loc.SrcMgr && "Loc comes from another SourceManager!");
-    return isBeforeInTranslationUnitThan((SourceLocation)Loc);
-  }
-
-  /// \brief Comparison function class, useful for sorting FullSourceLocs.
-  struct BeforeThanCompare : public std::__binary_function<FullSourceLoc,
-                                                         FullSourceLoc, bool> {
-    bool operator()(const FullSourceLoc& lhs, const FullSourceLoc& rhs) const {
-      return lhs.isBeforeInTranslationUnitThan(rhs);
-    }
-  };
-
   /// Prints information about this FullSourceLoc to stderr. Useful for
   ///  debugging.
   void dump() const { SourceLocation::dump(*SrcMgr); }
@@ -328,7 +225,7 @@ public:
   friend inline bool
   operator==(const FullSourceLoc &LHS, const FullSourceLoc &RHS) {
     return LHS.getRawEncoding() == RHS.getRawEncoding() &&
-          LHS.SrcMgr == RHS.SrcMgr;
+           LHS.SrcMgr == RHS.SrcMgr;
   }
 
   friend inline bool
@@ -340,8 +237,8 @@ public:
 
 /// PresumedLoc - This class represents an unpacked "presumed" location which
 /// can be presented to the user.  A 'presumed' location can be modified by
-/// #line and GNU line marker directives and is always the expansion point of
-/// a normal location.
+/// #line and GNU line marker directives and is always the instantiation point
+/// of a normal location.
 ///
 /// You can get a PresumedLoc from a SourceLocation with SourceManager.
 class PresumedLoc {
@@ -351,7 +248,7 @@ class PresumedLoc {
 public:
   PresumedLoc() : Filename(0) {}
   PresumedLoc(const char *FN, unsigned Ln, unsigned Co, SourceLocation IL)
-    : Filename(FN), Line(Ln), Col(Co), IncludeLoc(IL) {
+      : Filename(FN), Line(Ln), Col(Co), IncludeLoc(IL) {
   }
 
   /// isInvalid - Return true if this object is invalid or uninitialized. This
@@ -381,43 +278,27 @@ public:
 }  // end namespace clang
 
 namespace llvm {
-  /// Define DenseMapInfo so that FileID's can be used as keys in DenseMap and
-  /// DenseSets.
-  template <>
-  struct DenseMapInfo<clang::FileID> {
-    static inline clang::FileID getEmptyKey() {
-      return clang::FileID();
-    }
-    static inline clang::FileID getTombstoneKey() {
-      return clang::FileID::getSentinel();
-    }
+/// Define DenseMapInfo so that FileID's can be used as keys in DenseMap and
+/// DenseSets.
+template <>
+struct DenseMapInfo<clang::FileID> {
+  static inline clang::FileID getEmptyKey() {
+    return clang::FileID();
+  }
+  static inline clang::FileID getTombstoneKey() {
+    return clang::FileID::getSentinel();
+  }
 
-    static unsigned getHashValue(clang::FileID S) {
-      return S.getHashValue();
-    }
+  static unsigned getHashValue(clang::FileID S) {
+    return S.getHashValue();
+  }
 
-    static bool isEqual(clang::FileID LHS, clang::FileID RHS) {
-      return LHS == RHS;
-    }
-  };
-  
-  template <>
-  struct isPodLike<clang::SourceLocation> { static const bool value = true; };
-  template <>
-  struct isPodLike<clang::FileID> { static const bool value = true; };
+  static bool isEqual(clang::FileID LHS, clang::FileID RHS) {
+    return LHS == RHS;
+  }
 
-  // Teach SmallPtrSet how to handle SourceLocation.
-  template<>
-  class PointerLikeTypeTraits<clang::SourceLocation> {
-  public:
-    static inline void *getAsVoidPointer(clang::SourceLocation L) {
-      return L.getPtrEncoding();
-    }
-    static inline clang::SourceLocation getFromVoidPointer(void *P) {
-      return clang::SourceLocation::getFromRawEncoding((unsigned)(uintptr_t)P);
-    }
-    enum { NumLowBitsAvailable = 0 };
-  };
+  static bool isPod() { return true; }
+};
 
 }  // end namespace llvm
 

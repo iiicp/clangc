@@ -23,7 +23,7 @@ using namespace clang;
 // PrettyStackTraceLoc
 //===----------------------------------------------------------------------===//
 
-void PrettyStackTraceLoc::print(raw_ostream &OS) const {
+void PrettyStackTraceLoc::print(llvm::raw_ostream &OS) const {
   if (Loc.isValid()) {
     Loc.print(OS, SM);
     OS << ": ";
@@ -35,7 +35,7 @@ void PrettyStackTraceLoc::print(raw_ostream &OS) const {
 // SourceLocation
 //===----------------------------------------------------------------------===//
 
-void SourceLocation::print(raw_ostream &OS, const SourceManager &SM)const{
+void SourceLocation::print(llvm::raw_ostream &OS, const SourceManager &SM)const{
   if (!isValid()) {
     OS << "<invalid loc>";
     return;
@@ -43,18 +43,13 @@ void SourceLocation::print(raw_ostream &OS, const SourceManager &SM)const{
 
   if (isFileID()) {
     PresumedLoc PLoc = SM.getPresumedLoc(*this);
-
-    if (PLoc.isInvalid()) {
-      OS << "<invalid>";
-      return;
-    }
-    // The macro expansion and spelling pos is identical for file locs.
+    // The instantiation and spelling pos is identical for file locs.
     OS << PLoc.getFilename() << ':' << PLoc.getLine()
        << ':' << PLoc.getColumn();
     return;
   }
 
-  SM.getExpansionLoc(*this).print(OS, SM);
+  SM.getInstantiationLoc(*this).print(OS, SM);
 
   OS << " <Spelling=";
   SM.getSpellingLoc(*this).print(OS, SM);
@@ -75,9 +70,9 @@ FileID FullSourceLoc::getFileID() const {
 }
 
 
-FullSourceLoc FullSourceLoc::getExpansionLoc() const {
+FullSourceLoc FullSourceLoc::getInstantiationLoc() const {
   assert(isValid());
-  return FullSourceLoc(SrcMgr->getExpansionLoc(*this), *SrcMgr);
+  return FullSourceLoc(SrcMgr->getInstantiationLoc(*this), *SrcMgr);
 }
 
 FullSourceLoc FullSourceLoc::getSpellingLoc() const {
@@ -85,24 +80,24 @@ FullSourceLoc FullSourceLoc::getSpellingLoc() const {
   return FullSourceLoc(SrcMgr->getSpellingLoc(*this), *SrcMgr);
 }
 
-unsigned FullSourceLoc::getExpansionLineNumber(bool *Invalid) const {
+unsigned FullSourceLoc::getInstantiationLineNumber() const {
   assert(isValid());
-  return SrcMgr->getExpansionLineNumber(*this, Invalid);
+  return SrcMgr->getInstantiationLineNumber(*this);
 }
 
-unsigned FullSourceLoc::getExpansionColumnNumber(bool *Invalid) const {
+unsigned FullSourceLoc::getInstantiationColumnNumber() const {
   assert(isValid());
-  return SrcMgr->getExpansionColumnNumber(*this, Invalid);
+  return SrcMgr->getInstantiationColumnNumber(*this);
 }
 
-unsigned FullSourceLoc::getSpellingLineNumber(bool *Invalid) const {
+unsigned FullSourceLoc::getSpellingLineNumber() const {
   assert(isValid());
-  return SrcMgr->getSpellingLineNumber(*this, Invalid);
+  return SrcMgr->getSpellingLineNumber(*this);
 }
 
-unsigned FullSourceLoc::getSpellingColumnNumber(bool *Invalid) const {
+unsigned FullSourceLoc::getSpellingColumnNumber() const {
   assert(isValid());
-  return SrcMgr->getSpellingColumnNumber(*this, Invalid);
+  return SrcMgr->getSpellingColumnNumber(*this);
 }
 
 bool FullSourceLoc::isInSystemHeader() const {
@@ -110,23 +105,19 @@ bool FullSourceLoc::isInSystemHeader() const {
   return SrcMgr->isInSystemHeader(*this);
 }
 
-bool FullSourceLoc::isBeforeInTranslationUnitThan(SourceLocation Loc) const {
+const char *FullSourceLoc::getCharacterData() const {
   assert(isValid());
-  return SrcMgr->isBeforeInTranslationUnit(*this, Loc);
+  return SrcMgr->getCharacterData(*this);
 }
 
-const char *FullSourceLoc::getCharacterData(bool *Invalid) const {
+const llvm::MemoryBuffer* FullSourceLoc::getBuffer() const {
   assert(isValid());
-  return SrcMgr->getCharacterData(*this, Invalid);
+  return SrcMgr->getBuffer(SrcMgr->getFileID(*this));
 }
 
-const llvm::MemoryBuffer* FullSourceLoc::getBuffer(bool *Invalid) const {
-  assert(isValid());
-  return SrcMgr->getBuffer(SrcMgr->getFileID(*this), Invalid);
-}
-
-StringRef FullSourceLoc::getBufferData(bool *Invalid) const {
-  return getBuffer(Invalid)->getBuffer();
+std::pair<const char*, const char*> FullSourceLoc::getBufferData() const {
+  const llvm::MemoryBuffer *Buf = getBuffer();
+  return std::make_pair(Buf->getBufferStart(), Buf->getBufferEnd());
 }
 
 std::pair<FileID, unsigned> FullSourceLoc::getDecomposedLoc() const {

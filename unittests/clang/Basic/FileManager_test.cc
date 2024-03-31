@@ -4,8 +4,7 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace clang;
 TEST(FMTest, test_get_file) {
-  FileSystemOptions options;
-  clang::FileManager fm(options);
+  clang::FileManager fm;
   const char *testFile = "../CMakeLists.txt";
   const char *testDir = "..";
   const clang::FileEntry *entry = fm.getFile(testFile);

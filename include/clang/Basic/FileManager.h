@@ -1,78 +1,60 @@
+//===--- FileManager.h - File System Probing and Caching --------*- C++ -*-===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+//  This file defines the FileManager interface.
+//
+//===----------------------------------------------------------------------===//
+
 #ifndef LLVM_CLANG_FILEMANAGER_H
 #define LLVM_CLANG_FILEMANAGER_H
 
-#include "clang/Basic/FileSystemOptions.h"
-#include "clang/Basic/LLVM.h"
-#include "llvm/ADT/OwningPtr.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/OwningPtr.h"
 #include "llvm/Support/Allocator.h"
-#include <sys/stat.h>
-#include <sys/types.h>
+#include "llvm/Config/config.h" // for mode_t
+#include <map>
+#include <set>
 #include <string>
-
-#ifdef _MSC_VER
-typedef unsigned short mode_t;
-#endif
-
-struct stat;
-
-namespace llvm {
-class MemoryBuffer;
-namespace sys {
-class Path;
-}
-} // namespace llvm
+// FIXME: Enhance libsystem to support inode and other fields in stat.
+#include <sys/types.h>
+#include <sys/stat.h>
 
 namespace clang {
 class FileManager;
-class FileSystemStatCache;
+
 /// DirectoryEntry - Cached information about one directory on the disk.
 ///
 class DirectoryEntry {
-  const char *Name; // Name of the directory.
+  const char *Name;   // Name of the directory.
   friend class FileManager;
-
 public:
-  DirectoryEntry() : Name(nullptr) {}
+  DirectoryEntry() : Name(0) {}
   const char *getName() const { return Name; }
 };
 
 /// FileEntry - Cached information about one file on the disk.
 ///
 class FileEntry {
-  const char *Name;          // Name of the file.
-  off_t Size;                // File size in bytes.
-  time_t ModTime;            // Modification time of file.
-  const DirectoryEntry *Dir; // Directory file lives in.
-  unsigned UID;              // A unique (small) ID for the file.
-  dev_t Device;              // ID for the device containing the file.
-  ino_t Inode;               // Inode number for the file.
-  mode_t FileMode;           // The file mode as returned by 'stat'.
-
-  /// FD - The file descriptor for the file entry if it is opened and owned
-  /// by the FileEntry.  If not, this is set to -1.
-  mutable int FD;
+  const char *Name;           // Name of the file.
+  off_t Size;                 // File size in bytes.
+  time_t ModTime;             // Modification time of file.
+  const DirectoryEntry *Dir;  // Directory file lives in.
+  unsigned UID;               // A unique (small) ID for the file.
+  dev_t Device;               // ID for the device containing the file.
+  ino_t Inode;                // Inode number for the file.
+  mode_t FileMode;            // The file mode as returned by 'stat'.
   friend class FileManager;
-
 public:
   FileEntry(dev_t device, ino_t inode, mode_t m)
-      : Name(0), Device(device), Inode(inode), FileMode(m), FD(-1) {}
+      : Name(0), Device(device), Inode(inode), FileMode(m) {}
   // Add a default constructor for use with llvm::StringMap
-  FileEntry() : Name(0), Device(0), Inode(0), FileMode(0), FD(-1) {}
-
-  FileEntry(const FileEntry &FE) {
-    memcpy(this, &FE, sizeof(FE));
-    assert(FD == -1 && "Cannot copy a file-owning FileEntry");
-  }
-
-  void operator=(const FileEntry &FE) {
-    memcpy(this, &FE, sizeof(FE));
-    assert(FD == -1 && "Cannot assign a file-owning FileEntry");
-  }
-
-  ~FileEntry();
+  FileEntry() : Name(0), Device(0), Inode(0), FileMode(0) {}
 
   const char *getName() const { return Name; }
   off_t getSize() const { return Size; }
@@ -86,42 +68,64 @@ public:
   ///
   const DirectoryEntry *getDir() const { return Dir; }
 
-  bool operator<(const FileEntry &RHS) const {
+  bool operator<(const FileEntry& RHS) const {
     return Device < RHS.Device || (Device == RHS.Device && Inode < RHS.Inode);
   }
 };
+
+// FIXME: This is a lightweight shim that is used by FileManager to cache
+//  'stat' system calls.  We will use it with PTH to identify if caching
+//  stat calls in PTH files is a performance win.
+class StatSysCallCache {
+public:
+  virtual ~StatSysCallCache() {}
+  virtual int stat(const char *path, struct stat *buf) = 0;
+};
+
+/// \brief A stat listener that can be used by FileManager to keep
+/// track of the results of stat() calls that occur throughout the
+/// execution of the front end.
+class MemorizeStatCalls : public StatSysCallCache {
+public:
+  /// \brief The result of a stat() call.
+  ///
+  /// The first member is the result of calling stat(). If stat()
+  /// found something, the second member is a copy of the stat
+  /// structure.
+  typedef std::pair<int, struct stat> StatResult;
+
+  /// \brief The set of stat() calls that have been
+  llvm::StringMap<StatResult, llvm::BumpPtrAllocator> StatCalls;
+
+  typedef llvm::StringMap<StatResult, llvm::BumpPtrAllocator>::const_iterator
+      iterator;
+
+  iterator begin() const { return StatCalls.begin(); }
+  iterator end() const { return StatCalls.end(); }
+
+  virtual int stat(const char *path, struct stat *buf);
+};
+
 /// FileManager - Implements support for file system lookup, file system
 /// caching, and directory search management.  This also handles more advanced
 /// properties, such as uniquing files based on "inode", so that a file with two
 /// names (e.g. symlinked) will be treated as a single file.
 ///
 class FileManager {
-  FileSystemOptions FileSystemOpts;
 
   class UniqueDirContainer;
   class UniqueFileContainer;
 
-  /// UniqueRealDirs/UniqueRealFiles - Cache for existing real directories/files.
+  /// UniqueDirs/UniqueFiles - Cache for existing directories/files.
   ///
-  UniqueDirContainer &UniqueRealDirs;
-  UniqueFileContainer &UniqueRealFiles;
+  UniqueDirContainer &UniqueDirs;
+  UniqueFileContainer &UniqueFiles;
 
-  /// \brief The virtual directories that we have allocated.  For each
-  /// virtual file (e.g. foo/bar/baz.cpp), we add all of its parent
-  /// directories (foo/ and foo/bar/) here.
-  llvm::SmallVector<DirectoryEntry *, 4> VirtualDirectoryEntries;
-  /// \brief The virtual files that we have allocated.
-  llvm::SmallVector<FileEntry *, 4> VirtualFileEntries;
-
-  /// SeenDirEntries/SeenFileEntries - This is a cache that maps paths
-  /// to directory/file entries (either real or virtual) we have
-  /// looked up.  The actual Entries for real directories/files are
-  /// owned by UniqueRealDirs/UniqueRealFiles above, while the Entries
-  /// for virtual directories/files are owned by
-  /// VirtualDirectoryEntries/VirtualFileEntries above.
+  /// DirEntries/FileEntries - This is a cache of directory/file entries we have
+  /// looked up.  The actual Entry is owned by UniqueFiles/UniqueDirs above.
   ///
-  llvm::StringMap<DirectoryEntry*, llvm::BumpPtrAllocator> SeenDirEntries;
-  llvm::StringMap<FileEntry*, llvm::BumpPtrAllocator> SeenFileEntries;
+  llvm::StringMap<DirectoryEntry*, llvm::BumpPtrAllocator> DirEntries;
+  llvm::StringMap<FileEntry*, llvm::BumpPtrAllocator> FileEntries;
 
   /// NextFileUID - Each FileEntry we create is assigned a unique ID #.
   ///
@@ -132,87 +136,43 @@ class FileManager {
   unsigned NumDirCacheMisses, NumFileCacheMisses;
 
   // Caching.
-  llvm::OwningPtr<FileSystemStatCache> StatCache;
+  llvm::OwningPtr<StatSysCallCache> StatCache;
 
-  bool getStatValue(const char *Path, struct stat &StatBuf,
-                    int *FileDescriptor);
-
-  /// Add all ancestors of the given path (pointing to either a file
-  /// or a directory) as virtual directories.
-  void addAncestorsAsVirtualDirs(llvm::StringRef Path);
+  int stat_cached(const char* path, struct stat* buf) {
+    return StatCache.get() ? StatCache->stat(path, buf) : stat(path, buf);
+  }
 
 public:
-  FileManager(const FileSystemOptions &FileSystemOpts);
+  FileManager();
   ~FileManager();
 
-  /// \brief Installs the provided FileSystemStatCache object within
-  /// the FileManager.
+  /// setStatCache - Installs the provided StatSysCallCache object within
+  ///  the FileManager.  Ownership of this object is transferred to the
+  ///  FileManager.
+  void setStatCache(StatSysCallCache *statCache) {
+    StatCache.reset(statCache);
+  }
+
+  /// getDirectory - Lookup, cache, and verify the specified directory.  This
+  /// returns null if the directory doesn't exist.
   ///
-  /// Ownership of this object is transferred to the FileManager.
+  const DirectoryEntry *getDirectory(const std::string &Filename) {
+    return getDirectory(&Filename[0], &Filename[0] + Filename.size());
+  }
+  const DirectoryEntry *getDirectory(const char *FileStart,const char *FileEnd);
+
+  /// getFile - Lookup, cache, and verify the specified file.  This returns null
+  /// if the file doesn't exist.
   ///
-  /// \param statCache the new stat cache to install. Ownership of this
-  /// object is transferred to the FileManager.
-  ///
-  /// \param AtBeginning whether this new stat cache must be installed at the
-  /// beginning of the chain of stat caches. Otherwise, it will be added to
-  /// the end of the chain.
-  void addStatCache(FileSystemStatCache *statCache, bool AtBeginning = false);
-
-  /// \brief Removes the specified FileSystemStatCache object from the manager.
-  void removeStatCache(FileSystemStatCache *statCache);
-
-  /// getDirectory - Lookup, cache, and verify the specified directory
-  /// (real or virtual).  This returns NULL if the directory doesn't exist.
-  ///
-  /// \param CacheFailure If true and the file does not exist, we'll cache
-  /// the failure to find this file.
-  const DirectoryEntry *getDirectory(StringRef DirName,
-                                     bool CacheFailure = true);
-
-  /// \brief Lookup, cache, and verify the specified file (real or
-  /// virtual).  This returns NULL if the file doesn't exist.
-  ///
-  /// \param OpenFile if true and the file exists, it will be opened.
-  ///
-  /// \param CacheFailure If true and the file does not exist, we'll cache
-  /// the failure to find this file.
-  const FileEntry *getFile(StringRef Filename, bool OpenFile = false,
-                           bool CacheFailure = true);
-
-  /// \brief Returns the current file system options
-  const FileSystemOptions &getFileSystemOptions() { return FileSystemOpts; }
-
-  /// \brief Retrieve a file entry for a "virtual" file that acts as
-  /// if there were a file with the given name on disk. The file
-  /// itself is not accessed.
-  const FileEntry *getVirtualFile(StringRef Filename, off_t Size,
-                                  time_t ModificationTime);
-
-  /// \brief Open the specified file as a MemoryBuffer, returning a new
-  /// MemoryBuffer if successful, otherwise returning null.
-  llvm::MemoryBuffer *getBufferForFile(const FileEntry *Entry,
-                                       std::string *ErrorStr = 0);
-  llvm::MemoryBuffer *getBufferForFile(StringRef Filename,
-                                       std::string *ErrorStr = 0);
-
-  // getNoncachedStatValue - Will get the 'stat' information for the given path.
-  // If the path is relative, it will be resolved against the WorkingDir of the
-  // FileManager's FileSystemOptions.
-  bool getNoncachedStatValue(StringRef Path, struct stat &StatBuf);
-
-  /// \brief If path is not absolute and FileSystemOptions set the working
-  /// directory, the path is modified to be relative to the given
-  /// working directory.
-  void FixupRelativePath(SmallVectorImpl<char> &path) const;
-
-  /// \brief Produce an array mapping from the unique IDs assigned to each
-  /// file to the corresponding FileEntry pointer.
-  void GetUniqueIDMapping(
-      SmallVectorImpl<const FileEntry *> &UIDToFiles) const;
-
+  const FileEntry *getFile(const std::string &Filename) {
+    return getFile(&Filename[0], &Filename[0] + Filename.size());
+  }
+  const FileEntry *getFile(const char *FilenameStart,
+                           const char *FilenameEnd);
+  
   void PrintStats() const;
 };
 
-} // namespace clang
+}  // end namespace clang
 
 #endif
