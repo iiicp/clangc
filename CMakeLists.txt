@@ -35,5 +35,9 @@ add_subdirectory(llvm)
 add_subdirectory(lib)
 add_subdirectory(tools/driver)
 
+option(CCLANG_UNIT_TESTS "the CClang unit tests." OFF)
+
+if( CCLANG_UNIT_TESTS )
 enable_testing()
 add_subdirectory(unittests/clang)
+endif ()
