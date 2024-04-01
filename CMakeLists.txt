@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_COMPILE_WARNING_AS_ERROR OFF)
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    project(CClang)
+    project(ClangC)
 
     include_directories("${CMAKE_BINARY_DIR}/include"
             "${CMAKE_BINARY_DIR}/llvm/include"

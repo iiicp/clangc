@@ -5,4 +5,4 @@ set(c_clang_src
         ${cclangBasic}
         ${cclangLex}
         )
-add_library(CClang STATIC ${c_clang_src})
+add_library(ClangC STATIC ${c_clang_src})

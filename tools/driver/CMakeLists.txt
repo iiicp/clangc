@@ -1,9 +1,9 @@
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
-add_executable(cclang main.cc)
+add_executable(clangc main.cc)
 
-target_link_libraries(cclang
+target_link_libraries(clangc
         PRIVATE
-        CClang
+        ClangC
         LLVMSupport
         LLVMTarget
         )

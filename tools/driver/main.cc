@@ -16,7 +16,7 @@
 using namespace clang;
 
 static const char *Head =
-    "mini clang compiler: https://github.com/iiicp/mini-clang";
+    "clang c compiler: https://github.com/iiicp/clangc";
 
 void printVersion() {
   llvm::outs() << Head << " " << clang::getClangVersion() << "\n";
