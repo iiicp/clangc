@@ -1,4 +1,13 @@
 #include "clang/Basic/Diagnostic.h"
+
+// #include "clang/Lex/LexDiagnostic.h"
+// #include "clang/Parse/ParseDiagnostic.h"
+// #include "clang/AST/ASTDiagnostic.h"
+// #include "clang/Sema/SemaDiagnostic.h"
+// #include "clang/Frontend/FrontendDiagnostic.h"
+// #include "clang/Analysis/AnalysisDiagnostic.h"
+#include "clang/Driver/DriverDiagnostic.h"
+
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/SourceLocation.h"
 #include "llvm/ADT/SmallVector.h"
@@ -39,15 +48,15 @@ struct StaticDiagInfoRec {
 static const StaticDiagInfoRec StaticDiagInfo[] = {
 #define DIAG(ENUM, CLASS, DEFAULT_MAPPING, DESC, GROUP, SFINAE)                \
   {diag::ENUM, DEFAULT_MAPPING, CLASS, SFINAE, DESC, GROUP},
-// #include "clang/Basic/DiagnosticASTKinds.inc"
-// #include "clang/Basic/DiagnosticAnalysisKinds.inc"
-#include "clang/Basic/DiagnosticCommonKinds.inc"
-    // #include "clang/Basic/DiagnosticDriverKinds.inc"
-    // #include "clang/Basic/DiagnosticFrontendKinds.inc"
-    // #include "clang/Basic/DiagnosticLexKinds.inc"
-    // #include "clang/Basic/DiagnosticParseKinds.inc"
-    // #include "clang/Basic/DiagnosticSemaKinds.inc"
-    {0, 0, 0, 0, 0, 0}};
+  // #include "clang/Basic/DiagnosticASTKinds.inc"
+  // #include "clang/Basic/DiagnosticAnalysisKinds.inc"
+  #include "clang/Basic/DiagnosticCommonKinds.inc"
+  #include "clang/Basic/DiagnosticDriverKinds.inc"
+  // #include "clang/Basic/DiagnosticFrontendKinds.inc"
+  // #include "clang/Basic/DiagnosticLexKinds.inc"
+  // #include "clang/Basic/DiagnosticParseKinds.inc"
+  // #include "clang/Basic/DiagnosticSemaKinds.inc"
+  {0, 0, 0, 0, 0, 0}};
 #undef DIAG
 
 /// GetDiagInfo - Return the StaticDiagInfoRec entry for the specified DiagID,
@@ -339,13 +348,13 @@ struct WarningOption {
 };
 
 #define GET_DIAG_ARRAYS
-#include "clang/Basic/DiagnosticGroups.inc"
+// #include "clang/Basic/DiagnosticGroups.inc"
 #undef GET_DIAG_ARRAYS
 
 // Second the table of options, sorted by name for fast binary lookup.
 static const WarningOption OptionTable[] = {
 #define GET_DIAG_TABLE
-#include "clang/Basic/DiagnosticGroups.inc"
+// #include "clang/Basic/DiagnosticGroups.inc"
 #undef GET_DIAG_TABLE
 };
 static const size_t OptionTableSize =

@@ -2,6 +2,7 @@
 .idea/
 cmake-build*
 build/
+bin/
 Bin/
 .DS_Store
 *.vscode

@@ -1,3 +1,2 @@
-
 file(GLOB_RECURSE SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
-set(clangcBasic ${SRCS} CACHE INTERNAL "")
+set(clangcDriver ${SRCS} CACHE INTERNAL "")

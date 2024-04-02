@@ -380,8 +380,7 @@ int main(int argc, char **argv) {
   llvm::PrettyStackTraceProgram X(argc, argv);
 
   llvm::cl::SetVersionPrinter(printVersion);
-  llvm::cl::ParseCommandLineOptions(argc, argv, Head);
-
+  //llvm::cl::ParseCommandLineOptions(argc, argv, Head);
   return 0;
 
   //   llvm::InitializeAllTargets();

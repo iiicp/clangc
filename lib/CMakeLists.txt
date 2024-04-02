@@ -1,8 +1,10 @@
 add_subdirectory(Basic)
 add_subdirectory(Lex)
+add_subdirectory(Driver)
 
-set(c_clang_src
-        ${cclangBasic}
-        ${cclangLex}
+set(clang_c_src
+        ${clangcBasic}
+        ${clangcLex}
+        ${clangcDriver}
         )
-add_library(ClangC STATIC ${c_clang_src})
+add_library(ClangC STATIC ${clang_c_src})
