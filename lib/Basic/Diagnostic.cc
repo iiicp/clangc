@@ -1,6 +1,6 @@
 #include "clang/Basic/Diagnostic.h"
 
-// #include "clang/Lex/LexDiagnostic.h"
+#include "clang/Lex/LexDiagnostic.h"
 // #include "clang/Parse/ParseDiagnostic.h"
 // #include "clang/AST/ASTDiagnostic.h"
 // #include "clang/Sema/SemaDiagnostic.h"

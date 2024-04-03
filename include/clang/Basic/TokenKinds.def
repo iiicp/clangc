@@ -216,15 +216,6 @@ KEYWORD(typeof, KEYGNU)
 // Apple Extension.
 KEYWORD(__private_extern__, KEYALL)
 
-// Microsoft Extension.
-KEYWORD(__declspec, KEYALL)
-KEYWORD(__cdecl, KEYALL)
-KEYWORD(__stdcall, KEYALL)
-KEYWORD(__fastcall, KEYALL)
-KEYWORD(__ptr64, KEYALL)
-KEYWORD(__w64, KEYALL)
-KEYWORD(__forceinline, KEYALL)
-
 // Alternate spelling for various tokens.  There are GCC extensions in all
 // languages, but should not be disabled in strict conformance mode.
 ALIAS("__attribute__", __attribute, KEYALL)
